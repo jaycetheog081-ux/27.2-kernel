@@ -23,19 +23,23 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: stable
+          cache: false
 
       - name: Build ipsw CLI
         run: |
-          go install github.com/blacktop/ipsw@latest
+          go install github.com/blacktop/ipsw/cmd/ipsw@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          ipsw version
 
       - name: Download iOS 27.2 IPSW
         run: |
           mkdir -p firmware extracted
 
-          curl -fL --retry 5 \
+          curl -fL --retry 5 --retry-delay 3 \
             "https://updates.cdn-apple.com/2026FallFCS/28a1e046-aaaf-4f60-9990-b6cfa708511a/iPhone14%2C5_27.2_24B119_Restore.ipsw" \
             -o firmware/iOS_27.2_iPhone13.ipsw
+
+          ls -lh firmware/iOS_27.2_iPhone13.ipsw
 
       - name: Verify IPSW SHA256
         run: |
