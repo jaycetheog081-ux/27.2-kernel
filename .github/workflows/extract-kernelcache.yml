@@ -1,0 +1,76 @@
+
+name: Extract iOS 27.2 Kernelcache
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    name: Download and Decompress Kernelcache
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl unzip file
+
+      - name: Install ipsw
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Build ipsw CLI
+        run: |
+          go install github.com/blacktop/ipsw@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Download iOS 27.2 IPSW
+        run: |
+          mkdir -p firmware extracted
+
+          curl -fL --retry 5 \
+            "https://updates.cdn-apple.com/2026FallFCS/28a1e046-aaaf-4f60-9990-b6cfa708511a/iPhone14%2C5_27.2_24B119_Restore.ipsw" \
+            -o firmware/iOS_27.2_iPhone13.ipsw
+
+      - name: Verify IPSW SHA256
+        run: |
+          echo "ee3dc875e219f9fae985ea51dbe2ffde43dbc6481c11cfe4d614b3e7a3163c4c  firmware/iOS_27.2_iPhone13.ipsw" | sha256sum -c -
+
+      - name: Extract and decompress kernelcache
+        run: |
+          ipsw extract --kernel \
+            --output extracted \
+            firmware/iOS_27.2_iPhone13.ipsw
+
+          echo "Extracted files:"
+          find extracted -type f -exec ls -lh {} \;
+
+      - name: Verify kernelcache
+        run: |
+          KERNEL=$(find extracted -type f -iname '*kernelcache*' -print -quit)
+
+          if [ -z "$KERNEL" ]; then
+            echo "ERROR: Kernelcache not found"
+            exit 1
+          fi
+
+          echo "Kernelcache: $KERNEL"
+          file "$KERNEL"
+
+          file "$KERNEL" | grep -q "Mach-O" || {
+            echo "ERROR: Output is not a Mach-O binary"
+            exit 1
+          }
+
+      - name: Upload decompressed kernelcache
+        uses: actions/upload-artifact@v4
+        with:
+          name: iOS-27.2-iPhone13-Decompressed-Kernelcache
+          path: extracted/
+          if-no-files-found: error
+          retention-days: 7
